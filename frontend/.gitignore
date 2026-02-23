@@ -1,0 +1,7 @@
+# Frontend .gitignore
+node_modules/
+dist/
+dist-ssr/
+*.local
+.env
+.env.local
