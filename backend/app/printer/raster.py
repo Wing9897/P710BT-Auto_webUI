@@ -1,6 +1,6 @@
 """Raster image preparation for Brother PT printers."""
 from PIL import Image
-from .constants import MediaWidthToTapeMargin, PRINT_HEAD_PINS
+from .constants import MediaWidthToTapeMargin
 
 
 def make_fit(image: Image.Image, media_width: int) -> Image.Image | None:
@@ -30,11 +30,17 @@ def select_raster_channel(image: Image.Image) -> Image.Image:
     if image.mode == "1":
         return image
     elif image.mode == "L":
-        return image.point(lambda x: 0xFF if x < 0xFF else 0)
+        # dark pixel (< 128) = print, white = no print
+        return image.point(lambda x: 0xFF if x < 128 else 0)
     elif image.mode == "RGB":
-        return image.convert("L").point(lambda x: 0xFF if x < 0xFF else 0)
+        gray = image.convert("L")
+        return gray.point(lambda x: 0xFF if x < 128 else 0)
     elif image.mode == "RGBA":
-        return image.split()[-1].point(lambda x: 0xFF if x > 0 else 0)
+        # Composite onto white background first, then threshold
+        bg = Image.new("RGB", image.size, "white")
+        bg.paste(image, mask=image.split()[3])  # use alpha as mask
+        gray = bg.convert("L")
+        return gray.point(lambda x: 0xFF if x < 128 else 0)
     else:
         raise AttributeError(f"Unsupported color space: {image.mode}")
 
@@ -51,14 +57,25 @@ def compress_buffer(buffer: bytearray) -> bytearray:
 
 
 def prepare_image(image: Image.Image, media_width: int) -> Image.Image:
-    w, h = image.width, image.height
-    image = make_fit(image, media_width)
-    if image is None:
-        expected = MediaWidthToTapeMargin.to_print_width(media_width)
-        raise AttributeError(
-            f"At least one dimension must match tape width: {expected} vs ({w}, {h})"
-        )
-    return select_raster_channel(image)
+    expected = MediaWidthToTapeMargin.to_print_width(media_width)
+    result = make_fit(image, media_width)
+    if result is None:
+        # Auto-resize: scale image so the larger dimension fits expected height
+        w, h = image.width, image.height
+        # Determine orientation: height should map to tape height
+        if h >= w:
+            # portrait/square: scale so height = expected
+            new_w = max(1, round(w * expected / h))
+            resized = image.resize((new_w, expected), Image.LANCZOS)
+        else:
+            # landscape: scale so width = expected (then rotate)
+            new_h = max(1, round(h * expected / w))
+            resized = image.resize((expected, new_h), Image.LANCZOS)
+        result = make_fit(resized, media_width)
+        if result is None:
+            # Fallback: force-fit by resizing height directly
+            result = image.resize((image.width, expected), Image.LANCZOS)
+    return select_raster_channel(result)
 
 
 def raster_image(prepared_image: Image.Image, media_width: int) -> bytearray:
