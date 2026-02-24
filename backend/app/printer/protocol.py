@@ -2,8 +2,8 @@
 import packbits
 from .constants import (
     LINE_LENGTH_BYTES, Mode, StatusOffsets, StatusType,
-    MediaWidthToTapeMargin, STATUS_MESSAGE_LENGTH,
-    ErrorInformation1, ErrorInformation2, MediaType, TapeColor, TextColor,
+    STATUS_MESSAGE_LENGTH,
+    MediaType, TapeColor, TextColor,
 )
 from .transport import Transport
 from PIL import Image

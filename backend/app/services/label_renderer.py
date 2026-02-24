@@ -1,19 +1,17 @@
 """Label renderer — text/QR/barcode → PIL Image for printing."""
 from __future__ import annotations
 import io
-import math
 import textwrap
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Literal
 
 import qrcode
 import barcode as python_barcode
 from barcode.writer import ImageWriter
 from PIL import Image, ImageDraw, ImageFont
 
-from ..printer.constants import MediaWidthToTapeMargin, PRINT_DPI, TAPE_WIDTHS_MM
+from ..printer.constants import MediaWidthToTapeMargin, TAPE_WIDTHS_MM
 
 # Fallback font
 _BUILTIN_FONTS_DIR = Path(__file__).resolve().parent.parent.parent / "fonts"

@@ -1,63 +1,49 @@
-# Brother Label Printer Web Tool
+# Brother Label Printer Desktop Tool
 
-Web-based label printing tool for Brother PT series printers (P710BT, P750W, E550W).
-Combines USB (pyusb) and Bluetooth RFCOMM transport with a React frontend.
+PyQt6 desktop application for Brother PT series printers (P710BT, P750W, E550W).
+Single-file GUI with USB connectivity — no web server or browser required.
 
 ## Quick Start
 
-### Backend
-
 ```cmd
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+install.bat          # install Python dependencies
+start.bat            # launch desktop app
 ```
 
-### Frontend
+Or manually:
 
 ```cmd
-cd frontend
-npm install
-npm run dev
+pip install -r backend\requirements.txt
+python main_desktop.py
 ```
 
-Then open http://localhost:5173
+## Prerequisites
+
+- **Python 3.10+**
+- **Zadig** — install WinUSB driver for the printer (one-time setup)
 
 ## Features
 
-- **Multi-format data import**: JSON array, CSV, tab/pipe/semicolon delimited, Excel (.xlsx)
+- **Multi-format data import**: JSON array, CSV, custom delimiter, Excel (.xlsx)
 - **Field types**: Plain text, QR Code, Code128, Code39, EAN13
 - **Auto layout**: Auto font scaling, multi-line word wrap, center alignment
-- **Tape widths**: 3.5mm, 6mm, 9mm, 12mm, 18mm, 24mm
-- **Transport**: USB and Bluetooth Classic (RFCOMM)
-- **Batch print**: Print labels for all data rows with progress tracking
-- **Live preview**: Real-time label preview as you edit
+- **Tape widths**: 3.5mm, 6mm, 9mm, 12mm, 18mm, 24mm (auto-detected)
+- **USB printing**: Direct USB connection via libusb
+- **Batch print**: Print labels for all data rows with progress bar
+- **Live preview**: Real-time label preview with pagination
 
 ## Architecture
 
 ```
-backend/          Python FastAPI
+main_desktop.py       PyQt6 desktop GUI (entry point)
+backend/
   app/
-    printer/      Transport ABC + USB/BT + Brother PT raster protocol
-    services/     Label renderer (Pillow) + Data parser
-    routers/      REST API endpoints
-    models/       Pydantic schemas
-
-frontend/         React + Vite + TypeScript + Tailwind CSS
-  src/
-    components/   DataImport, LabelEditor, LabelPreview, PrintPanel
-    api/          Axios API client
-    types/        TypeScript type definitions
+    printer/          USB transport + Brother PT raster protocol
+      constants.py    Protocol constants, printer IDs, tape margins
+      transport.py    USB transport (libusb)
+      protocol.py     Brother PT command builder + printer driver
+      raster.py       Image → raster data conversion
+    services/
+      data_parser.py  Multi-format data parser
+      label_renderer.py  Label rendering engine (Pillow)
 ```
-
-## API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | /api/data/parse | Parse input data (form multipart) |
-| POST | /api/label/preview | Single label preview (PNG base64) |
-| POST | /api/label/batch-preview | Batch preview for data rows |
-| POST | /api/label/print | Print labels |
-| GET | /api/printer/discover | Discover USB printers |
-| GET | /api/printer/status | Get printer status |
-| GET | /api/fonts | List available fonts |

@@ -29,6 +29,14 @@ def parse_csv(text: str, delimiter: str | None = None) -> list[dict[str, str]]:
 
 
 def parse_delimited(text: str, delimiter: str) -> list[dict[str, str]]:
+    lines = [l for l in text.strip().splitlines() if l.strip()]
+    if not lines:
+        return []
+    # Single line: each delimited value = one label row
+    if len(lines) == 1:
+        values = lines[0].split(delimiter)
+        return [{"value": v.strip()} for v in values if v.strip()]
+    # Multiple lines: first line = header, rest = data rows
     return parse_csv(text, delimiter=delimiter)
 
 
