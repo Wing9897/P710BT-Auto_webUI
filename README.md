@@ -7,16 +7,21 @@ Single-file GUI with USB connectivity — no web server or browser required.
 
 Pre-built binaries are available on the [Releases](../../releases) page — no Python installation required.
 
-| Platform | Architecture | File |
-|----------|-------------|------|
-| Windows | x64 | `P710BT-Auto-windows-x64.zip` |
-| Linux | x64 | `P710BT-Auto-linux-x64.tar.gz` |
-| Linux | ARM64 | `P710BT-Auto-linux-arm64.tar.gz` |
-| macOS | Apple Silicon (M1/M2/M3/M4) + Intel via Rosetta 2 | `P710BT-Auto-macos-arm64.dmg` |
+| Platform | Architecture | Format | File |
+|----------|-------------|--------|------|
+| Windows | x64 | Portable (no install) | `P710BT-Auto-windows-x64.zip` |
+| Windows | x64 | Installer | `P710BT-Auto-windows-x64-setup.exe` |
+| Linux | x64 | AppImage (no install) | `P710BT-Auto-linux-x64.AppImage` |
+| Linux | x64 | DEB package | `P710BT-Auto-linux-x64.deb` |
+| Linux | ARM64 | AppImage (no install) | `P710BT-Auto-linux-arm64.AppImage` |
+| Linux | ARM64 | DEB package | `P710BT-Auto-linux-arm64.deb` |
+| macOS | Apple Silicon (M1/M2/M3/M4) + Intel via Rosetta 2 | DMG | `P710BT-Auto-macos-arm64.dmg` |
 
 ### Usage
-- **Windows**: Extract `.zip` → run `main_desktop.exe`
-- **Linux**: Extract `.tar.gz` → run `./main_desktop` (first time: `chmod +x main_desktop`)
+- **Windows (portable)**: Extract `.zip` → run `main_desktop.exe`
+- **Windows (installer)**: Run `setup.exe` → desktop shortcut created automatically
+- **Linux AppImage**: `chmod +x *.AppImage` → run directly (no installation)
+- **Linux DEB**: `sudo dpkg -i *.deb` → run `p710bt-auto`
 - **macOS**: Open `.dmg` → double-click `main_desktop.app`
 
 > **Windows only**: Install [Zadig](https://zadig.akeo.ie/) to set up the WinUSB driver for the printer (one-time setup).

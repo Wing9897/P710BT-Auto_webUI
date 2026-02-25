@@ -110,7 +110,8 @@ jobs:
             libxkbcommon-x11-0 \
             patchelf \
             qt6-base-dev \
-            qmake6
+            qmake6 \
+            imagemagick
 
       # ── macOS 系統依賴 ──
       - name: Install system deps (macOS)
@@ -149,42 +150,86 @@ jobs:
         env:
           PYTHONPATH: ./backend
 
-      # ── 打包成壓縮檔 (Windows) ──
-      - name: Package artifact (Windows)
+      # ── 準備輸出目錄 ──
+      - name: Prepare output directory
+        shell: bash
+        run: mkdir -p dist-files
+
+      # ── Windows 打包：portable zip + Inno Setup installer ──
+      - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          ARCHIVE="P710BT-Auto-${{ matrix.name }}.zip"
-          cd build/main_desktop.dist
-          7z a "../../$ARCHIVE" . > /dev/null
-          cd ../..
-          echo "ARTIFACT=$ARCHIVE" >> $GITHUB_ENV
+          VERSION="${{ needs.auto-tag.outputs.version }}"
+          # Portable zip
+          (cd build/main_desktop.dist && 7z a "../../dist-files/P710BT-Auto-windows-x64.zip" . > /dev/null)
+          # Inno Setup installer (.exe)
+          cat > setup.iss << EOF
+          [Setup]
+          AppName=P710BT-Auto
+          AppVersion=${VERSION}
+          DefaultDirName={autopf}\\P710BT-Auto
+          DefaultGroupName=P710BT-Auto
+          OutputDir=dist-files
+          OutputBaseFilename=P710BT-Auto-windows-x64-setup
+          Compression=lzma
+          SolidCompression=yes
+          WizardStyle=modern
+          [Files]
+          Source: "build\\main_desktop.dist\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+          [Icons]
+          Name: "{group}\\P710BT-Auto"; Filename: "{app}\\main_desktop.exe"
+          Name: "{commondesktop}\\P710BT-Auto"; Filename: "{app}\\main_desktop.exe"
+          [Run]
+          Filename: "{app}\\main_desktop.exe"; Description: "Launch P710BT-Auto"; Flags: nowait postinstall skipifsilent
+          EOF
+          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" setup.iss
 
-      # ── 打包成壓縮檔 (Unix / Linux) ──
-      - name: Package artifact (Linux)
+      # ── Linux 打包：AppImage + deb ──
+      - name: Package (Linux)
         if: runner.os == 'Linux'
         run: |
-          ARCHIVE="P710BT-Auto-${{ matrix.name }}.tar.gz"
-          tar -czf "$ARCHIVE" -C build/main_desktop.dist .
-          echo "ARTIFACT=$ARCHIVE" >> $GITHUB_ENV
+          ARCH=$(uname -m)
+          NAME="${{ matrix.name }}"
+          VERSION="${{ needs.auto-tag.outputs.version }}"
+          DEB_VERSION="${VERSION#v}"
+          case "$ARCH" in x86_64) DEB_ARCH="amd64" ;; aarch64) DEB_ARCH="arm64" ;; esac
 
-      # ── 打包成 DMG (macOS) ──
-      - name: Package artifact (macOS DMG)
+          # AppImage
+          wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${ARCH}.AppImage" -O appimagetool
+          chmod +x appimagetool
+          mkdir -p AppDir
+          cp -r build/main_desktop.dist/* AppDir/
+          printf '#!/bin/bash\nHERE="$(dirname "$(readlink -f "$0")")"\nexec "${HERE}/main_desktop" "$@"\n' > AppDir/AppRun
+          chmod +x AppDir/AppRun
+          printf '[Desktop Entry]\nName=P710BT-Auto\nExec=main_desktop\nIcon=main_desktop\nType=Application\nCategories=Utility;\n' > AppDir/main_desktop.desktop
+          convert -size 256x256 xc:#1565C0 AppDir/main_desktop.png
+          ARCH=$ARCH APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool AppDir "dist-files/P710BT-Auto-${NAME}.AppImage"
+
+          # DEB
+          PKG="pkg-deb"
+          mkdir -p "${PKG}/DEBIAN" "${PKG}/usr/local/lib/p710bt-auto" "${PKG}/usr/local/bin" "${PKG}/usr/share/applications"
+          cp -r build/main_desktop.dist/* "${PKG}/usr/local/lib/p710bt-auto/"
+          printf '#!/bin/bash\nexec /usr/local/lib/p710bt-auto/main_desktop "$@"\n' > "${PKG}/usr/local/bin/p710bt-auto"
+          chmod +x "${PKG}/usr/local/bin/p710bt-auto"
+          printf '[Desktop Entry]\nName=P710BT-Auto\nExec=p710bt-auto\nIcon=p710bt-auto\nType=Application\nCategories=Utility;\n' > "${PKG}/usr/share/applications/p710bt-auto.desktop"
+          printf "Package: p710bt-auto\nVersion: ${DEB_VERSION}\nArchitecture: ${DEB_ARCH}\nMaintainer: Wing9897\nDescription: Brother Label Printer Desktop Tool\n" > "${PKG}/DEBIAN/control"
+          dpkg-deb --build "${PKG}" "dist-files/P710BT-Auto-${NAME}.deb"
+
+      # ── macOS 打包：DMG ──
+      - name: Package (macOS)
         if: runner.os == 'macOS'
         run: |
-          DMG="P710BT-Auto-${{ matrix.name }}.dmg"
-          # Nuitka --mode=app 在 macOS 直接輸出 .app bundle
           hdiutil create -volname "P710BT-Auto" \
             -srcfolder "build/main_desktop.app" \
             -ov -format UDZO \
-            "${DMG}"
-          echo "ARTIFACT=${DMG}" >> $GITHUB_ENV
+            "dist-files/P710BT-Auto-${{ matrix.name }}.dmg"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: ${{ env.ARTIFACT }}
+          path: dist-files/
           retention-days: 1
 
   # ─────────────────────────────────────────────
@@ -218,14 +263,19 @@ jobs:
 
             ### 支援平台 / Supported Platforms
 
-            | 平台 | 架構 | 檔案 |
-            |------|------|------|
-            | Windows | x64 | `P710BT-Auto-windows-x64.zip` |
-            | Linux | x64 | `P710BT-Auto-linux-x64.tar.gz` |
-            | Linux | arm64 | `P710BT-Auto-linux-arm64.tar.gz` |
-            | macOS | arm64 (Apple Silicon) | `P710BT-Auto-macos-arm64.dmg` |
+            | 平台 | 架構 | 格式 | 檔案 |
+            |------|------|------|------|
+            | Windows | x64 | 免安裝 portable | `P710BT-Auto-windows-x64.zip` |
+            | Windows | x64 | 安裝程式 | `P710BT-Auto-windows-x64-setup.exe` |
+            | Linux | x64 | AppImage (免安裝) | `P710BT-Auto-linux-x64.AppImage` |
+            | Linux | x64 | DEB 安裝包 | `P710BT-Auto-linux-x64.deb` |
+            | Linux | arm64 | AppImage (免安裝) | `P710BT-Auto-linux-arm64.AppImage` |
+            | Linux | arm64 | DEB 安裝包 | `P710BT-Auto-linux-arm64.deb` |
+            | macOS | arm64 (Apple Silicon + Intel via Rosetta 2) | DMG | `P710BT-Auto-macos-arm64.dmg` |
 
             ### 使用說明
-            - **Windows**: 解壓縮 `.zip`，執行 `main_desktop.exe`
-            - **Linux**: 解壓縮 `.tar.gz`，執行 `./main_desktop`（首次請先 `chmod +x main_desktop`）
-            - **macOS**: 開啟 `.dmg`，將 `main_desktop.app` 拖入 Applications 或直接雙擊執行
+            - **Windows (portable)**: 解壓縮 `.zip`，執行 `main_desktop.exe`
+            - **Windows (installer)**: 執行 `setup.exe`，依指示安裝，桌面會出現捷徑
+            - **Linux AppImage**: `chmod +x *.AppImage` 後直接執行
+            - **Linux DEB**: `sudo dpkg -i *.deb` 後執行 `p710bt-auto`
+            - **macOS**: 開啟 `.dmg`，雙擊 `main_desktop.app`
