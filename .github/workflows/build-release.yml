@@ -115,7 +115,12 @@ jobs:
       # ── macOS 系統依賴 ──
       - name: Install system deps (macOS)
         if: runner.os == 'macOS'
-        run: brew install libusb
+        run: |
+          brew install libusb
+          # Apple Silicon homebrew 裝在 /opt/homebrew，但 libusb_package 期望 /usr/local（Intel 路徑）
+          # 建立 symlink 讓 Nuitka 能找到正確的 dylib
+          sudo mkdir -p /usr/local/lib
+          sudo ln -sf "$(brew --prefix libusb)/lib/libusb-1.0.0.dylib" /usr/local/lib/libusb-1.0.0.dylib
 
       # ── Python 套件 ──
       - name: Install Python dependencies
