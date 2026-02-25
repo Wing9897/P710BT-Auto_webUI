@@ -127,26 +127,37 @@ jobs:
           pip install --upgrade pip
           pip install --prefer-binary -r backend/requirements.txt
 
-      # ── Nuitka 打包 ──
+      # ── Nuitka 打包 (Windows / Linux) ──
+      # Nuitka 4.0 封鎖 macOS + PyQt6，macOS 改用 PyInstaller
       - name: Build with Nuitka
+        if: runner.os != 'macOS'
         uses: Nuitka/Nuitka-Action@main
         with:
           nuitka-version: main
           script-name: main_desktop.py
           enable-plugins: pyqt6
-          # 明確包含 app 套件（backend 目錄透過 PYTHONPATH 加入搜尋路徑）
           include-package: |
             app
             usb
             libusb_package
-          # 包含 libusb-package 內的原生二進位（Windows libusb-1.0.dll 等）
           include-package-data: libusb_package
-          # PyQt6 GUI App：關閉 Windows console 視窗
           windows-console-mode: disable
           output-dir: build
         env:
-          # 讓 Nuitka 編譯時能找到 backend/app
           PYTHONPATH: ./backend
+
+      # ── PyInstaller 打包 (macOS) ──
+      - name: Build with PyInstaller (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          pip install pyinstaller
+          PYTHONPATH=backend pyinstaller \
+            --onedir --windowed --name main_desktop \
+            --paths backend \
+            --collect-submodules app \
+            --collect-submodules usb \
+            --collect-all libusb_package \
+            main_desktop.py
 
       # ── 打包成壓縮檔 (Windows) ──
       - name: Package artifact (Windows)
@@ -159,12 +170,20 @@ jobs:
           cd ../..
           echo "ARTIFACT=$ARCHIVE" >> $GITHUB_ENV
 
-      # ── 打包成壓縮檔 (Unix) ──
-      - name: Package artifact (Unix)
-        if: runner.os != 'Windows'
+      # ── 打包成壓縮檔 (Linux) ──
+      - name: Package artifact (Linux)
+        if: runner.os == 'Linux'
         run: |
           ARCHIVE="P710BT-Auto-${{ matrix.name }}.tar.gz"
           tar -czf "$ARCHIVE" -C build/main_desktop.dist .
+          echo "ARTIFACT=$ARCHIVE" >> $GITHUB_ENV
+
+      # ── 打包成壓縮檔 (macOS) ──
+      - name: Package artifact (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          ARCHIVE="P710BT-Auto-${{ matrix.name }}.tar.gz"
+          tar -czf "$ARCHIVE" -C dist main_desktop.app
           echo "ARTIFACT=$ARCHIVE" >> $GITHUB_ENV
 
       - name: Upload build artifact
@@ -215,5 +234,5 @@ jobs:
 
             ### 使用說明
             - **Windows**: 解壓縮 `.zip`，執行 `main_desktop.exe`
-            - **Linux/macOS**: 解壓縮 `.tar.gz`，執行 `./main_desktop`
-            > ⚠️ Linux 首次執行請先 `chmod +x main_desktop`
+            - **Linux**: 解壓縮 `.tar.gz`，執行 `./main_desktop`（首次請先 `chmod +x main_desktop`）
+            - **macOS**: 解壓縮 `.tar.gz`，將 `main_desktop.app` 拖入 Applications 或直接雙擊執行
