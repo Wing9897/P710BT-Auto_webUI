@@ -85,7 +85,7 @@ class USBTransport(Transport):
         try:
             return bytes(self._dev.read(USB_IN_EP_ID, length, USB_TRX_TIMEOUT_MS))
         except usb.core.USBError:
-            raise RuntimeError("IO timeout while reading from printer")
+            return b""  # timeout → return empty, let caller retry
 
     def close(self) -> None:
         if self._dev:
