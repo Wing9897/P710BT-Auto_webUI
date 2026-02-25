@@ -172,14 +172,10 @@ jobs:
       - name: Package artifact (macOS DMG)
         if: runner.os == 'macOS'
         run: |
-          # 建立標準 .app bundle 結構
-          APP="main_desktop.app"
-          mkdir -p "${APP}/Contents/MacOS"
-          cp -r build/main_desktop.dist/* "${APP}/Contents/MacOS/"
-          # 用 hdiutil 建立壓縮 DMG（macOS 內建工具）
           DMG="P710BT-Auto-${{ matrix.name }}.dmg"
+          # Nuitka --mode=app 在 macOS 直接輸出 .app bundle
           hdiutil create -volname "P710BT-Auto" \
-            -srcfolder "${APP}" \
+            -srcfolder "build/main_desktop.app" \
             -ov -format UDZO \
             "${DMG}"
           echo "ARTIFACT=${DMG}" >> $GITHUB_ENV
