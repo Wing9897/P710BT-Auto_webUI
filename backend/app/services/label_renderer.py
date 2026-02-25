@@ -1,7 +1,6 @@
 """Label renderer — text/QR/barcode → PIL Image for printing."""
 from __future__ import annotations
 import io
-import textwrap
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -11,7 +10,7 @@ import barcode as python_barcode
 from barcode.writer import ImageWriter
 from PIL import Image, ImageDraw, ImageFont
 
-from ..printer.constants import MediaWidthToTapeMargin, TAPE_WIDTHS_MM
+from ..printer.constants import MediaWidthToTapeMargin
 
 # Fallback font
 _BUILTIN_FONTS_DIR = Path(__file__).resolve().parent.parent.parent / "fonts"
@@ -92,22 +91,30 @@ def _auto_font_size(text: str, font_name: str | None, max_h: int, max_w: int | N
 
 
 def _wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:
-    """Word-wrap text, also breaking on CJK characters."""
-    # First try without wrapping
-    bbox = font.getbbox(text)
-    if (bbox[2] - bbox[0]) <= max_width:
-        return [text]
-
-    # Estimate chars per line
-    avg_char_w = max((bbox[2] - bbox[0]) / max(len(text), 1), 1)
-    chars_per_line = max(int(max_width / avg_char_w), 1)
-
+    """Word-wrap text, breaking on spaces or between any CJK characters."""
     lines: list[str] = []
     for paragraph in text.split("\n"):
-        wrapped = textwrap.wrap(paragraph, width=chars_per_line, break_long_words=True,
-                                break_on_hyphens=True)
-        lines.extend(wrapped if wrapped else [""])
-    return lines
+        if not paragraph:
+            lines.append("")
+            continue
+        bbox = font.getbbox(paragraph)
+        if (bbox[2] - bbox[0]) <= max_width:
+            lines.append(paragraph)
+            continue
+        # Character-by-character measurement (handles CJK and mixed text)
+        current = ""
+        for char in paragraph:
+            test = current + char
+            bb = font.getbbox(test)
+            if (bb[2] - bb[0]) <= max_width:
+                current = test
+            else:
+                if current:
+                    lines.append(current)
+                current = char
+        if current:
+            lines.append(current)
+    return lines if lines else [""]
 
 
 def _render_text_block(
@@ -134,7 +141,8 @@ def _render_text_block(
         font_size -= 1
         font = _resolve_font(font_name, font_size)
         lines = _wrap_text(text, font, effective_max_w)
-        line_h = font.getbbox("Ay")[3] - font.getbbox("Ay")[1]
+        bb_ref = font.getbbox("Ay")
+        line_h = bb_ref[3] - bb_ref[1]
         total_h = line_h * len(lines) + 2 * (len(lines) - 1)
 
     # measure width
@@ -142,7 +150,7 @@ def _render_text_block(
     for ln in lines:
         bb = font.getbbox(ln)
         line_widths.append(bb[2] - bb[0])
-    img_w = max(line_widths) if line_widths else 10
+    img_w = max(1, max(line_widths)) if line_widths else 1
 
     img = Image.new("RGBA", (img_w, target_h), (255, 255, 255, 0))
     draw = ImageDraw.Draw(img)
@@ -159,26 +167,31 @@ def _render_text_block(
 
 
 def _render_qr(value: str, target_h: int) -> Image.Image:
-    qr = qrcode.QRCode(border=1, box_size=max(target_h // 25, 2))
+    # Use large box_size for a crisp native image, then resize precisely
+    box_size = max(target_h // 10, 4)
+    qr = qrcode.QRCode(border=1, box_size=box_size)
     qr.add_data(value)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white").convert("RGBA")
-    img = img.resize((target_h, target_h), Image.NEAREST)
+    img = img.resize((target_h, target_h), Image.Resampling.NEAREST)
     return img
 
 
 def _render_barcode(value: str, barcode_type: str, target_h: int) -> Image.Image:
     bc_class = python_barcode.get_barcode_class(barcode_type)
-    writer = ImageWriter()
-    # render to bytes
     buf = io.BytesIO()
-    bc = bc_class(value, writer=writer)
-    bc.write(buf, options={"module_height": target_h * 0.6, "quiet_zone": 1, "write_text": False})
+    bc = bc_class(value, writer=ImageWriter())
+    bc.write(buf, options={
+        "module_height": target_h * 0.72,
+        "quiet_zone": 1,
+        "write_text": False,
+        "font_size": 1,   # eliminates bottom text padding
+        "text_distance": 1,
+    })
     buf.seek(0)
     img = Image.open(buf).convert("RGBA")
-    # scale height to target
     ratio = target_h / img.height
-    img = img.resize((int(img.width * ratio), target_h), Image.LANCZOS)
+    img = img.resize((int(img.width * ratio), target_h), Image.Resampling.LANCZOS)
     return img
 
 
@@ -195,16 +208,18 @@ def render_label(spec: LabelSpec) -> Image.Image:
     # Render each field
     parts: list[Image.Image] = []
     for f in spec.fields:
+        size = f.font_size or spec.font_size
+        render_h = min(size, content_h) if size else content_h
         if f.field_type == FieldType.TEXT:
             part = _render_text_block(
-                f.value, content_h,
+                f.value, render_h,
                 f.font_name or spec.font_name,
-                f.font_size or spec.font_size,
+                size,
             )
         elif f.field_type == FieldType.QR:
-            part = _render_qr(f.value, content_h)
+            part = _render_qr(f.value, render_h)
         else:
-            part = _render_barcode(f.value, f.field_type.value, content_h)
+            part = _render_barcode(f.value, f.field_type.value, render_h)
         parts.append(part)
 
     if not parts:

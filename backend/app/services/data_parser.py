@@ -14,7 +14,7 @@ def parse_json(text: str) -> list[dict[str, str]]:
 
 def detect_delimiter(text: str) -> str:
     """Guess delimiter from first line."""
-    first_line = text.strip().split("\n")[0]
+    first_line = text.strip().splitlines()[0] if text.strip() else ""
     for delim in ["\t", "|", ";", ","]:
         if delim in first_line:
             return delim
@@ -24,12 +24,12 @@ def detect_delimiter(text: str) -> str:
 def parse_csv(text: str, delimiter: str | None = None) -> list[dict[str, str]]:
     if delimiter is None:
         delimiter = detect_delimiter(text)
-    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter, restval="")
     return [dict(row) for row in reader]
 
 
 def parse_delimited(text: str, delimiter: str) -> list[dict[str, str]]:
-    lines = [l for l in text.strip().splitlines() if l.strip()]
+    lines = [line for line in text.strip().splitlines() if line.strip()]
     if not lines:
         return []
     # Single line: each delimited value = one label row
@@ -43,20 +43,22 @@ def parse_delimited(text: str, delimiter: str) -> list[dict[str, str]]:
 def parse_excel(file_bytes: bytes) -> list[dict[str, str]]:
     import openpyxl
     wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
-    ws = wb.active
-    rows = list(ws.iter_rows(values_only=True))
-    if len(rows) < 2:
-        return []
-    headers = [str(h) if h is not None else f"col_{i}" for i, h in enumerate(rows[0])]
-    result = []
-    for row in rows[1:]:
-        record = {}
-        for i, val in enumerate(row):
-            key = headers[i] if i < len(headers) else f"col_{i}"
-            record[key] = str(val) if val is not None else ""
-        result.append(record)
-    wb.close()
-    return result
+    try:
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+        if len(rows) < 2:
+            return []
+        headers = [str(h) if h is not None else f"col_{i}" for i, h in enumerate(rows[0])]
+        result = []
+        for row in rows[1:]:
+            record = {}
+            for i, val in enumerate(row):
+                key = headers[i] if i < len(headers) else f"col_{i}"
+                record[key] = str(val) if val is not None else ""
+            result.append(record)
+        return result
+    finally:
+        wb.close()
 
 
 def parse_auto(text: str | None = None, file_bytes: bytes | None = None,

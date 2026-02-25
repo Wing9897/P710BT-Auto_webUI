@@ -8,7 +8,7 @@ def make_fit(image: Image.Image, media_width: int) -> Image.Image | None:
     if image.height == expected_height:
         return image
     if image.width == expected_height:
-        return image.transpose(Image.ROTATE_90)
+        return image.transpose(Image.Transpose.ROTATE_90)
     return None
 
 
@@ -46,6 +46,10 @@ def select_raster_channel(image: Image.Image) -> Image.Image:
 
 
 def compress_buffer(buffer: bytearray) -> bytearray:
+    # buffer must be a multiple of 8 (guaranteed by PRINT_HEAD_PINS=128)
+    if len(buffer) % 8 != 0:
+        # Pad to nearest multiple of 8
+        buffer = buffer + bytearray(8 - len(buffer) % 8)
     bits = bytearray()
     for i in range(0, len(buffer), 8):
         byte = 0
@@ -66,15 +70,15 @@ def prepare_image(image: Image.Image, media_width: int) -> Image.Image:
         if h >= w:
             # portrait/square: scale so height = expected
             new_w = max(1, round(w * expected / h))
-            resized = image.resize((new_w, expected), Image.LANCZOS)
+            resized = image.resize((new_w, expected), Image.Resampling.LANCZOS)
         else:
             # landscape: scale so width = expected (then rotate)
             new_h = max(1, round(h * expected / w))
-            resized = image.resize((expected, new_h), Image.LANCZOS)
+            resized = image.resize((expected, new_h), Image.Resampling.LANCZOS)
         result = make_fit(resized, media_width)
         if result is None:
             # Fallback: force-fit by resizing height directly
-            result = image.resize((image.width, expected), Image.LANCZOS)
+            result = image.resize((image.width, expected), Image.Resampling.LANCZOS)
     return select_raster_channel(result)
 
 

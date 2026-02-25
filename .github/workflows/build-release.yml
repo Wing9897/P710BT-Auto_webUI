@@ -1,0 +1,216 @@
+name: 🔨 Build & Release
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本號 (例如 v1.0.0)，留空則自動生成"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  # ─────────────────────────────────────────────
+  # 1. 自動生成版本 Tag
+  # ─────────────────────────────────────────────
+  auto-tag:
+    name: 🏷️ Auto Tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            DATE=$(date +'%Y.%m.%d')
+            COUNT=$(git rev-list --count HEAD)
+            VERSION="v${DATE}.${COUNT}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "✅ Version: ${VERSION}"
+
+      - name: Create & push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # 若 tag 已存在（重跑同一 commit）則跳過，其他錯誤仍中止
+          if git rev-parse "refs/tags/${{ steps.tag.outputs.version }}" >/dev/null 2>&1; then
+            echo "⚠️ Tag ${{ steps.tag.outputs.version }} already exists, skipping"
+          else
+            git tag "${{ steps.tag.outputs.version }}"
+            git push origin "${{ steps.tag.outputs.version }}"
+          fi
+
+  # ─────────────────────────────────────────────
+  # 2. 多平台 Nuitka 打包
+  # ─────────────────────────────────────────────
+  build:
+    name: 🛠️ Build [${{ matrix.name }}]
+    needs: auto-tag
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows x64
+          - os: windows-latest
+            name: windows-x64
+
+          # Linux x64
+          - os: ubuntu-22.04
+            name: linux-x64
+
+          # Linux ARM64 (GitHub native ARM64 runner)
+          - os: ubuntu-22.04-arm
+            name: linux-arm64
+
+          # macOS Intel (x64)
+          - os: macos-13
+            name: macos-x64
+
+          # macOS Apple Silicon (ARM64)
+          - os: macos-latest
+            name: macos-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ── Linux 系統依賴 ──
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            libgl1 \
+            libusb-1.0-0-dev \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-render-util0 \
+            libxcb-xinerama0 \
+            libxcb-xkb1 \
+            libxkbcommon-x11-0 \
+            patchelf
+
+      # ── macOS 系統依賴 ──
+      - name: Install system deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install libusb
+
+      # ── Python 套件 ──
+      - name: Install Python dependencies
+        run: pip install -r backend/requirements.txt
+
+      # ── Nuitka 打包 ──
+      - name: Build with Nuitka
+        uses: Nuitka/Nuitka-Action@main
+        with:
+          nuitka-version: main
+          script-name: main_desktop.py
+          standalone: true
+          enable-plugins: pyqt6
+          # 明確包含 app 套件（backend 目錄透過 PYTHONPATH 加入搜尋路徑）
+          include-package: |
+            app
+            usb
+            libusb_package
+          # 包含 libusb-package 內的原生二進位（Windows libusb-1.0.dll 等）
+          include-package-data: libusb_package
+          # PyQt6 GUI App：關閉 Windows console 視窗
+          windows-console-mode: disable
+          output-dir: build
+        env:
+          # 讓 Nuitka 編譯時能找到 backend/app
+          PYTHONPATH: ./backend
+
+      # ── 打包成壓縮檔 (Windows) ──
+      - name: Package artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          ARCHIVE="P710BT-Auto-${{ matrix.name }}.zip"
+          cd build/main_desktop.dist
+          7z a "../../$ARCHIVE" . > /dev/null
+          cd ../..
+          echo "ARTIFACT=$ARCHIVE" >> $GITHUB_ENV
+
+      # ── 打包成壓縮檔 (Unix) ──
+      - name: Package artifact (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          ARCHIVE="P710BT-Auto-${{ matrix.name }}.tar.gz"
+          tar -czf "$ARCHIVE" -C build/main_desktop.dist .
+          echo "ARTIFACT=$ARCHIVE" >> $GITHUB_ENV
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: ${{ env.ARTIFACT }}
+          retention-days: 1
+
+  # ─────────────────────────────────────────────
+  # 3. 自動建立 GitHub Release
+  # ─────────────────────────────────────────────
+  release:
+    name: 🚀 Create Release
+    needs: [auto-tag, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: release-files
+
+      - name: List release files
+        run: ls -lh release-files/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.auto-tag.outputs.version }}
+          name: "🚀 Release ${{ needs.auto-tag.outputs.version }}"
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: release-files/*
+          body: |
+            ## 📦 P710BT-Auto WebUI — ${{ needs.auto-tag.outputs.version }}
+
+            ### 支援平台 / Supported Platforms
+
+            | 平台 | 架構 | 檔案 |
+            |------|------|------|
+            | Windows | x64 | `P710BT-Auto-windows-x64.zip` |
+            | Linux | x64 | `P710BT-Auto-linux-x64.tar.gz` |
+            | Linux | arm64 | `P710BT-Auto-linux-arm64.tar.gz` |
+            | macOS | x64 (Intel) | `P710BT-Auto-macos-x64.tar.gz` |
+            | macOS | arm64 (Apple Silicon) | `P710BT-Auto-macos-arm64.tar.gz` |
+
+            ### 使用說明
+            - **Windows**: 解壓縮 `.zip`，執行 `main_desktop.exe`
+            - **Linux/macOS**: 解壓縮 `.tar.gz`，執行 `./main_desktop`
+            > ⚠️ Linux 首次執行請先 `chmod +x main_desktop`
