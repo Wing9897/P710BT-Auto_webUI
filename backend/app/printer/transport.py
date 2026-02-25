@@ -73,9 +73,10 @@ class USBTransport(Transport):
         from .constants import USB_OUT_EP_ID, USB_TRX_TIMEOUT_MS
         sent = 0
         while sent < len(data):
-            sent += self._dev.write(USB_OUT_EP_ID, data[sent:sent + 0x40], USB_TRX_TIMEOUT_MS)
-            if sent == 0:
+            chunk = self._dev.write(USB_OUT_EP_ID, data[sent:sent + 0x40], USB_TRX_TIMEOUT_MS)
+            if chunk == 0:
                 raise RuntimeError("IO timeout while writing to printer")
+            sent += chunk
         return sent
 
     def read(self, length: int = 0x80) -> bytes:
