@@ -117,7 +117,7 @@ class BrotherPrinter:
         for _ in range(10):
             self._tr.write(status_information_request())
             raw = self._tr.read(STATUS_MESSAGE_LENGTH)
-            if len(raw) > 0:
+            if len(raw) >= STATUS_MESSAGE_LENGTH:  # ensure full 32-byte response
                 self._status = PrinterStatus(raw)
                 return self._status
         raise RuntimeError("Printer did not respond to status request")
@@ -141,10 +141,11 @@ class BrotherPrinter:
         else:
             self._tr.write(print_without_feeding())
 
-        # wait for completion (max 120 retries ≈ 2 min at USB poll rate)
-        for _ in range(120):
+        # wait for completion (max 300 retries ≈ 5 min at USB poll rate)
+        for _ in range(300):
             res = self._tr.read()
             if len(res) < STATUS_MESSAGE_LENGTH:
+                import time; time.sleep(0.1)  # avoid tight busy-wait
                 continue
             st = res[StatusOffsets.STATUS_TYPE]
             if st == StatusType.PRINTING_COMPLETED:

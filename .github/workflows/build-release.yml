@@ -181,8 +181,8 @@ jobs:
           SolidCompression=yes
           WizardStyle=modern
           [Files]
-          Source: "build\\main_desktop.exe"; DestDir: "{app}"
-          Source: "build\\main_desktop.dist\\*"; DestDir: "{app}\\main_desktop.dist"; Flags: ignoreversion recursesubdirs createallsubdirs
+          Source: "staging\\main_desktop.exe"; DestDir: "{app}"
+          Source: "staging\\main_desktop.dist\\*"; DestDir: "{app}\\main_desktop.dist"; Flags: ignoreversion recursesubdirs createallsubdirs
           [Icons]
           Name: "{group}\\P710BT-Auto"; Filename: "{app}\\main_desktop.exe"
           Name: "{commondesktop}\\P710BT-Auto"; Filename: "{app}\\main_desktop.exe"
