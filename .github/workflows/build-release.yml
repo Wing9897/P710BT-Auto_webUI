@@ -117,12 +117,12 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install libusb
-          # 1. 複製真實 dylib（cp -L 解析所有 symlink）到 Intel Mac 標準路徑
-          sudo mkdir -p /usr/local/lib
-          sudo cp -L "$(brew --prefix libusb)/lib/libusb-1.0.0.dylib" /usr/local/lib/libusb-1.0.0.dylib
-          # 2. 修正 install name：brew dylib 內嵌 /opt/homebrew/... 路徑
-          #    Nuitka 掃描時路徑不一致會崩潰，改成與檔案位置相符的路徑
-          sudo install_name_tool -id "/usr/local/lib/libusb-1.0.0.dylib" /usr/local/lib/libusb-1.0.0.dylib
+          # libusb_package 內的 libusb-1.0.dylib 是 thin wrapper，引用外部路徑 /usr/local/lib/libusb-1.0.0.dylib
+          # Nuitka dependency scanner 追蹤此路徑時崩潰
+          # Fix：直接用真實 libusb dylib 覆蓋 wrapper，並改 install name 為 @loader_path（自包含）
+          LIBUSB_PKG=$(python -c "import libusb_package, os; print(os.path.dirname(libusb_package.__file__))")
+          cp -L "$(brew --prefix libusb)/lib/libusb-1.0.0.dylib" "$LIBUSB_PKG/libusb-1.0.dylib"
+          install_name_tool -id "@loader_path/libusb-1.0.dylib" "$LIBUSB_PKG/libusb-1.0.dylib"
 
       # ── Python 套件 ──
       - name: Install Python dependencies
@@ -130,9 +130,9 @@ jobs:
           pip install --upgrade pip
           pip install --prefer-binary -r backend/requirements.txt
 
-      # ── Nuitka 打包 (全平台，含 libusb_package) ──
+      # ── Nuitka 打包 (全平台) ──
+      # windows-console-mode 在 macOS/Linux 會被忽略，無需分開兩個 step
       - name: Build with Nuitka
-        if: runner.os != 'macOS'
         uses: Nuitka/Nuitka-Action@main
         with:
           nuitka-version: main
@@ -144,23 +144,6 @@ jobs:
             libusb_package
           include-package-data: libusb_package
           windows-console-mode: disable
-          output-dir: build
-        env:
-          PYTHONPATH: ./backend
-
-      # ── Nuitka 打包 (macOS) — libusb_package 依賴真實 dylib 而非 symlink ──
-      - name: Build with Nuitka (macOS)
-        if: runner.os == 'macOS'
-        uses: Nuitka/Nuitka-Action@main
-        with:
-          nuitka-version: main
-          script-name: main_desktop.py
-          enable-plugins: pyside6
-          include-package: |
-            app
-            usb
-            libusb_package
-          include-package-data: libusb_package
           output-dir: build
         env:
           PYTHONPATH: ./backend
