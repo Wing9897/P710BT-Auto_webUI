@@ -161,8 +161,13 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ needs.auto-tag.outputs.version }}"
+          # Nuitka --mode=app on Windows: exe 在 build/ 外，dist/ 在旁邊
+          # 需要把 exe + dist/ 一起放進 staging 目錄，保持相對路徑
+          mkdir -p staging
+          cp build/main_desktop.exe staging/
+          cp -r build/main_desktop.dist staging/
           # Portable zip
-          (cd build/main_desktop.dist && 7z a "../../dist-files/P710BT-Auto-windows-x64.zip" . > /dev/null)
+          (cd staging && 7z a "../dist-files/P710BT-Auto-windows-x64.zip" . > /dev/null)
           # Inno Setup installer (.exe)
           cat > setup.iss << EOF
           [Setup]
@@ -176,7 +181,8 @@ jobs:
           SolidCompression=yes
           WizardStyle=modern
           [Files]
-          Source: "build\\main_desktop.dist\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+          Source: "build\\main_desktop.exe"; DestDir: "{app}"
+          Source: "build\\main_desktop.dist\\*"; DestDir: "{app}\\main_desktop.dist"; Flags: ignoreversion recursesubdirs createallsubdirs
           [Icons]
           Name: "{group}\\P710BT-Auto"; Filename: "{app}\\main_desktop.exe"
           Name: "{commondesktop}\\P710BT-Auto"; Filename: "{app}\\main_desktop.exe"
