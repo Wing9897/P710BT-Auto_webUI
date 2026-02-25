@@ -1,4 +1,4 @@
-"""Brother Label Printer — PyQt6 Desktop Application.
+"""Brother Label Printer — PySide6 Desktop Application.
 
 Single-file GUI that reuses the existing backend modules for
 data parsing, label rendering, USB printer communication, etc.
@@ -13,15 +13,15 @@ import logging
 # Ensure backend package is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
 
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QTextEdit, QComboBox, QLineEdit,
     QSpinBox, QFileDialog, QTableWidget, QTableWidgetItem, QGroupBox,
     QSplitter, QMessageBox, QSizePolicy, QCheckBox, QScrollArea,
     QProgressBar, QDialog,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize
-from PyQt6.QtGui import QPixmap, QFont, QColor
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSize
+from PySide6.QtGui import QPixmap, QFont, QColor
 
 from app.services.data_parser import parse_auto
 from app.services.label_renderer import (
@@ -43,10 +43,10 @@ FIELD_TYPE_LABELS = {"text": "文字", "qr": "QR Code", "code128": "CODE128",
 
 class PrintWorker(QThread):
     """Background thread for printing labels."""
-    progress = pyqtSignal(int, int)        # (current, total)
-    label_done = pyqtSignal(int, str)      # (index, status_msg)
-    finished_all = pyqtSignal(int, int)    # (printed, total)
-    error = pyqtSignal(str)
+    progress = Signal(int, int)        # (current, total)
+    label_done = Signal(int, str)      # (index, status_msg)
+    finished_all = Signal(int, int)    # (printed, total)
+    error = Signal(str)
 
     def __init__(self, specs: list[LabelSpec], serial: str | None, margin_px: int,
                  chain_print: bool = False):
@@ -89,7 +89,7 @@ class PrintWorker(QThread):
 
 class PreviewWorker(QThread):
     """Background thread for rendering label previews."""
-    images_ready = pyqtSignal(list)  # list of bytes (PNG)
+    images_ready = Signal(list)  # list of bytes (PNG)
 
     def __init__(self, specs: list[LabelSpec]):
         super().__init__()
@@ -117,8 +117,8 @@ class PreviewWorker(QThread):
 
 class ParseWorker(QThread):
     """Background thread for parsing data files / text."""
-    parsed = pyqtSignal(list)   # list[dict]
-    error = pyqtSignal(str)
+    parsed = Signal(list)   # list[dict]
+    error = Signal(str)
 
     def __init__(self, *, path: str | None = None, text: str | None = None,
                  fmt: str = "csv", delimiter: str | None = None):
@@ -151,8 +151,8 @@ class ParseWorker(QThread):
 
 class USBScanWorker(QThread):
     """Background thread for USB printer discovery + tape detection."""
-    printers_found = pyqtSignal(list)           # list[dict]
-    tape_detected = pyqtSignal(int, str)        # (width_mm, serial)
+    printers_found = Signal(list)           # list[dict]
+    tape_detected = Signal(int, str)        # (width_mm, serial)
 
     def __init__(self, serial: str | None = None, detect_tape: bool = False):
         super().__init__()
@@ -201,7 +201,7 @@ class USBScanWorker(QThread):
 
 class DataImportPanel(QWidget):
     # emits (columns, field_types, data_rows)
-    data_parsed = pyqtSignal(list, list, list)
+    data_parsed = Signal(list, list, list)
 
     def __init__(self):
         super().__init__()
@@ -535,7 +535,7 @@ class DataImportPanel(QWidget):
 # ── Label Editor Panel ──────────────────────────────────────────────────────
 
 class LabelEditorPanel(QGroupBox):
-    label_changed = pyqtSignal()
+    label_changed = Signal()
 
     def __init__(self):
         super().__init__("✏️ 標籤設定")
@@ -820,7 +820,7 @@ class LabelPreviewPanel(QGroupBox):
 # ── Print Panel ─────────────────────────────────────────────────────────────
 
 class PrintPanel(QGroupBox):
-    tape_width_detected = pyqtSignal(int)
+    tape_width_detected = Signal(int)
 
     def __init__(self):
         super().__init__("🖨️ 列印")
