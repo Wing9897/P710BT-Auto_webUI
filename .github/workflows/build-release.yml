@@ -112,7 +112,9 @@ jobs:
             libxcb-xinerama0 \
             libxcb-xkb1 \
             libxkbcommon-x11-0 \
-            patchelf
+            patchelf \
+            qt6-base-dev \
+            qmake6
 
       # ── macOS 系統依賴 ──
       - name: Install system deps (macOS)
@@ -121,7 +123,9 @@ jobs:
 
       # ── Python 套件 ──
       - name: Install Python dependencies
-        run: pip install -r backend/requirements.txt
+        run: |
+          pip install --upgrade pip
+          pip install --prefer-binary -r backend/requirements.txt
 
       # ── Nuitka 打包 ──
       - name: Build with Nuitka
@@ -129,7 +133,6 @@ jobs:
         with:
           nuitka-version: main
           script-name: main_desktop.py
-          standalone: true
           enable-plugins: pyqt6
           # 明確包含 app 套件（backend 目錄透過 PYTHONPATH 加入搜尋路徑）
           include-package: |
