@@ -115,20 +115,21 @@ jobs:
       # ── macOS 系統依賴 ──
       - name: Install system deps (macOS)
         if: runner.os == 'macOS'
-        run: |
-          brew install libusb
-          # libusb_package 內的 libusb-1.0.dylib 是 thin wrapper，引用外部路徑 /usr/local/lib/libusb-1.0.0.dylib
-          # Nuitka dependency scanner 追蹤此路徑時崩潰
-          # Fix：直接用真實 libusb dylib 覆蓋 wrapper，並改 install name 為 @loader_path（自包含）
-          LIBUSB_PKG=$(python -c "import libusb_package, os; print(os.path.dirname(libusb_package.__file__))")
-          cp -L "$(brew --prefix libusb)/lib/libusb-1.0.0.dylib" "$LIBUSB_PKG/libusb-1.0.dylib"
-          install_name_tool -id "@loader_path/libusb-1.0.dylib" "$LIBUSB_PKG/libusb-1.0.dylib"
+        run: brew install libusb
 
       # ── Python 套件 ──
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
           pip install --prefer-binary -r backend/requirements.txt
+
+      # ── macOS libusb fix (需在 pip install 之後，libusb_package 才存在) ──
+      - name: Fix libusb dylib for Nuitka (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          LIBUSB_PKG=$(python -c "import libusb_package, os; print(os.path.dirname(libusb_package.__file__))")
+          cp -L "$(brew --prefix libusb)/lib/libusb-1.0.0.dylib" "$LIBUSB_PKG/libusb-1.0.dylib"
+          install_name_tool -id "@loader_path/libusb-1.0.dylib" "$LIBUSB_PKG/libusb-1.0.dylib"
 
       # ── Nuitka 打包 (全平台) ──
       # windows-console-mode 在 macOS/Linux 會被忽略，無需分開兩個 step
