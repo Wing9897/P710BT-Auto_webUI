@@ -3,6 +3,8 @@
 PySide6 desktop application for Brother PT series printers (P710BT, P750W, E550W).
 Single-file GUI with USB connectivity — no web server or browser required.
 
+![](GUI.png)
+
 ## Download
 
 Pre-built binaries are available on the [Releases](../../releases) page — no Python installation required.
