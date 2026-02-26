@@ -9,7 +9,7 @@ from .constants import (
 from .transport import Transport
 from PIL import Image
 from .raster import prepare_image, raster_image
-import logging, warnings
+import logging, time, warnings
 
 log = logging.getLogger(__name__)
 
@@ -111,13 +111,26 @@ class BrotherPrinter:
     def close(self):
         self._tr.close()
 
+    @staticmethod
+    def _parse_error(raw: bytes) -> str:
+        msgs: list[str] = []
+        e1, e2 = raw[StatusOffsets.ERROR_INFORMATION_1], raw[StatusOffsets.ERROR_INFORMATION_2]
+        if e1 & ErrorInformation1.NO_MEDIA:              msgs.append("no media")
+        if e1 & ErrorInformation1.CUTTER_JAM:            msgs.append("cutter jam")
+        if e1 & ErrorInformation1.WEAK_BATTERIES:        msgs.append("low batteries")
+        if e1 & ErrorInformation1.HIGH_VOLTAGE_ADAPTER:  msgs.append("high-voltage adapter")
+        if e2 & ErrorInformation2.WRONG_MEDIA:           msgs.append("wrong media")
+        if e2 & ErrorInformation2.COVER_OPEN:            msgs.append("cover open")
+        if e2 & ErrorInformation2.OVERHEATING:           msgs.append("overheating")
+        return " | ".join(msgs) or "Unknown printer error"
+
     def update_status(self) -> PrinterStatus:
         self._tr.write(invalidate())
         self._tr.write(initialize())
         for _ in range(10):
             self._tr.write(status_information_request())
             raw = self._tr.read(STATUS_MESSAGE_LENGTH)
-            if len(raw) >= STATUS_MESSAGE_LENGTH:  # ensure full 32-byte response
+            if len(raw) >= STATUS_MESSAGE_LENGTH:
                 self._status = PrinterStatus(raw)
                 return self._status
         raise RuntimeError("Printer did not respond to status request")
@@ -145,7 +158,7 @@ class BrotherPrinter:
         for _ in range(300):
             res = self._tr.read()
             if len(res) < STATUS_MESSAGE_LENGTH:
-                import time; time.sleep(0.1)  # avoid tight busy-wait
+                time.sleep(0.1)
                 continue
             st = res[StatusOffsets.STATUS_TYPE]
             if st == StatusType.PRINTING_COMPLETED:
@@ -155,19 +168,12 @@ class BrotherPrinter:
                     pass
                 return
             elif st == StatusType.ERROR_OCCURRED:
-                msgs = []
-                e1 = res[StatusOffsets.ERROR_INFORMATION_1]
-                e2 = res[StatusOffsets.ERROR_INFORMATION_2]
-                if e1 & ErrorInformation1.NO_MEDIA: msgs.append("no media")
-                if e1 & ErrorInformation1.CUTTER_JAM: msgs.append("cutter jam")
-                if e1 & ErrorInformation1.WEAK_BATTERIES: msgs.append("low batteries")
-                if e1 & ErrorInformation1.HIGH_VOLTAGE_ADAPTER: msgs.append("high-voltage adapter")
-                if e2 & ErrorInformation2.WRONG_MEDIA: msgs.append("wrong media")
-                if e2 & ErrorInformation2.COVER_OPEN: msgs.append("cover open")
-                if e2 & ErrorInformation2.OVERHEATING: msgs.append("overheating")
-                raise RuntimeError(" | ".join(msgs) if msgs else "Unknown printer error")
+                raise RuntimeError(self._parse_error(res))
             elif st == StatusType.TURNED_OFF:
                 raise RuntimeError("Printer turned off during printing")
+            elif st in (StatusType.PHASE_CHANGE, StatusType.NOTIFICATION,
+                        StatusType.REPLY_TO_STATUS_REQUEST):
+                continue  # intermediate status, keep waiting
         raise RuntimeError("Printer did not confirm print completion")
 
     def print_image(self, image: Image.Image, margin_px: int = 0,
@@ -177,7 +183,8 @@ class BrotherPrinter:
         prepared = prepare_image(image, mw)
         if (prepared.width + margin_px) < MINIMUM_TAPE_POINTS:
             warnings.warn(
-                f"Image ({prepared.width}) + margin ({margin_px}) < minimum tape width ({MINIMUM_TAPE_POINTS})"
+                f"Image ({prepared.width}) + margin ({margin_px}) "
+                f"< minimum tape width ({MINIMUM_TAPE_POINTS})"
             )
         data = raster_image(prepared, mw)
         self.print_data(data, margin_px, last_page=last_page, chain_print=chain_print)
