@@ -18,6 +18,18 @@ PySide6 桌面程式不需要另外開瀏覽器。
 
 ![](GUI.png)
 
+## 瀏覽器版畫面
+
+用 Chrome 或 Edge 打開網頁版。載入資料後可以改每一欄的類型，並即時看到標籤。
+
+載入範例後的資料、設定與標籤預覽：
+
+![](docs/web-sample.png)
+
+把 barcode 改成 QR、只留這一欄後的預覽和列印：
+
+![](docs/web-qr.png)
+
 ## Download
 
 Pre-built binaries are available on the [Releases](../../releases) page — no Python installation required.
