@@ -1,7 +1,20 @@
-# P710BT-Auto WebUI — Brother Label Printer Desktop Tool
+# P710BT-Auto — Brother 標籤列印
 
-PySide6 desktop application for Brother PT series printers (P710BT, P750W, E550W).
-Single-file GUI with USB connectivity — no web server or browser required.
+同一套標籤工具有兩個入口：瀏覽器版和桌面程式。核心都是讀資料、畫標籤、用 USB 列印 Brother PT 系列（P710BT、P750W、E550W）。
+
+## 兩種用法
+
+| | 瀏覽器版 | 桌面程式 |
+|---|---|---|
+| 怎麼開 | 用 Chrome 或 Edge 打開 [網頁版](https://wing9897.github.io/P710BT-Auto_webUI/)，可安裝到電腦 | 從 [Releases](../../releases) 下載 exe、AppImage 或 dmg |
+| 資料 | 只留在你的瀏覽器，不會上傳 | 只留在這部電腦 |
+| 列印 | 瀏覽器直接經 USB 送給打印機 | 程式直接經 USB 送給打印機 |
+
+瀏覽器版是放在 GitHub Pages 的靜態網頁，給你下載到自己的瀏覽器裡使用。安裝後沒有網絡也能設計標籤。請開網頁使用，不要把 html 檔另存後雙擊，否則連不到打印機。
+
+Windows 兩種用法都要先用 [Zadig](https://zadig.akeo.ie/) 把打印機驅動換成 WinUSB（只需做一次）。
+
+PySide6 桌面程式不需要另外開瀏覽器。
 
 ![](GUI.png)
 
@@ -115,6 +128,11 @@ start.bat            # launch app
 
 ```
 main_desktop.py       PySide6 desktop GUI (entry point)
+web/                  Browser app published to GitHub Pages
+  index.html          Page
+  manifest.webmanifest  Installable app (PWA)
+  sw.js               Offline cache
+  js/                 Import, preview, QR, barcode, WebUSB print
 backend/
   app/
     printer/          USB transport + Brother PT raster protocol
@@ -126,3 +144,5 @@ backend/
       data_parser.py  Multi-format data parser
       label_renderer.py  Label rendering engine (Pillow)
 ```
+
+推上 `main` 後，GitHub Actions 會做三件事：為這次提交打上版本標籤、打包各平台桌面程式並發佈到 Releases、把 `web/` 發佈到 GitHub Pages。

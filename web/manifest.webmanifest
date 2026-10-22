@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "P710BT 標籤列印",
+  "short_name": "P710BT",
+  "description": "在自己的瀏覽器裡設計並用 USB 列印 Brother 標籤。資料留在這部電腦。",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f2744",
+  "theme_color": "#1565c0",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
