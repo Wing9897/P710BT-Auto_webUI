@@ -2,7 +2,6 @@
 from enum import IntEnum, IntFlag
 
 PRINT_HEAD_PINS = 128
-PRINT_DPI = 180
 USBID_BROTHER = 0x04F9
 LINE_LENGTH_BYTES = 0x10
 MINIMUM_TAPE_POINTS = 174  # 25.4 mm @ 180dpi
@@ -130,5 +129,5 @@ class TextColor(IntEnum):
     INCOMPATIBLE = 0xFF
 
 
-# Tape width options for UI
-TAPE_WIDTHS_MM = [4, 6, 9, 12, 18, 24]
+# UI tape menu. Order follows the margin map above.
+TAPE_WIDTHS_MM = list(MediaWidthToTapeMargin.margin)

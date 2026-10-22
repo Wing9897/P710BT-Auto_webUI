@@ -9,9 +9,7 @@ from .constants import (
 from .transport import Transport
 from PIL import Image
 from .raster import prepare_image, raster_image
-import logging, time, warnings
-
-log = logging.getLogger(__name__)
+import time, warnings
 
 
 # ── Low-level command builders ──────────────────────────────────────────
@@ -83,14 +81,6 @@ class PrinterStatus:
         self.tape_color = TapeColor(raw[StatusOffsets.TAPE_COLOR_INFORMATION])
         self.text_color = TextColor(raw[StatusOffsets.TEXT_COLOR_INFORMATION])
         self.status_type = StatusType(raw[StatusOffsets.STATUS_TYPE])
-
-    def to_dict(self) -> dict:
-        return {
-            "media_width_mm": self.media_width,
-            "media_type": self.media_type.name,
-            "tape_color": self.tape_color.name,
-            "text_color": self.text_color.name,
-        }
 
 
 class BrotherPrinter:

@@ -13,14 +13,7 @@ def make_fit(image: Image.Image, media_width: int) -> Image.Image | None:
 
 
 def has_transparency(img: Image.Image) -> bool:
-    if img.info.get("transparency", None) is not None:
-        return True
-    if img.mode == "P":
-        transparent = img.info.get("transparency", -1)
-        for _, index in img.getcolors():
-            if index == transparent:
-                return True
-    return False
+    return img.info.get("transparency") is not None
 
 
 def select_raster_channel(image: Image.Image) -> Image.Image:

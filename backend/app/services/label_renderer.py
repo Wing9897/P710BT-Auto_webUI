@@ -65,7 +65,7 @@ def _resolve_font(name: str | None, size: int) -> ImageFont.FreeTypeFont:
     for c in candidates:
         try:
             return ImageFont.truetype(c, size)
-        except (OSError, IOError):
+        except OSError:
             continue
     return ImageFont.load_default()
 
@@ -238,13 +238,6 @@ def render_label(spec: LabelSpec) -> Image.Image:
     return label
 
 
-def render_label_to_bytes(spec: LabelSpec, fmt: str = "PNG") -> bytes:
-    img = render_label(spec)
-    buf = io.BytesIO()
-    img.save(buf, format=fmt)
-    return buf.getvalue()
-
-
 def list_available_fonts() -> list[str]:
     """List built-in font files."""
     fonts = []
@@ -258,6 +251,6 @@ def list_available_fonts() -> list[str]:
             ImageFont.truetype(name, 12)
             if name not in fonts:
                 fonts.append(name)
-        except (OSError, IOError):
+        except OSError:
             pass
     return fonts

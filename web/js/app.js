@@ -1,7 +1,6 @@
 import { parseAuto } from "./parser.js";
-import { renderLabel, tapeLabel } from "./label.js";
+import { renderLabel, tapeLabel, TAPE_WIDTHS } from "./label.js";
 import {
-  closeDevice,
   grantedDevices,
   openDevice,
   printCanvases,
@@ -332,7 +331,7 @@ async function connectPrinter(pickNew) {
     await openDevice(device);
     rememberDevice(device);
     const status = await readStatus(device);
-    if ([4, 6, 9, 12, 18, 24].includes(status.mediaWidth)) {
+    if (TAPE_WIDTHS.includes(status.mediaWidth)) {
       $("tape-select").value = String(status.mediaWidth);
       saveSettings();
       schedulePreview();

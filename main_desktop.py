@@ -27,9 +27,9 @@ from app.services.data_parser import parse_auto
 from app.services.label_renderer import (
     LabelSpec, FieldSpec, FieldType, render_label, list_available_fonts,
 )
-from app.printer.transport import USBTransport
+from app.printer.transport import USBTransport, find_brother_devices
 from app.printer.protocol import BrotherPrinter
-from app.printer.constants import TAPE_WIDTHS_MM, USBID_BROTHER, SupportedPrinterIDs
+from app.printer.constants import TAPE_WIDTHS_MM
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -160,23 +160,14 @@ class USBScanWorker(QThread):
         self._detect_tape = detect_tape
 
     def run(self):
-        # Discover printers
         found = []
         try:
-            import usb.core
-            try:
-                import libusb_package
-                backend = libusb_package.get_libusb1_backend()
-            except ImportError:
-                backend = None
-            for pid in SupportedPrinterIDs:
-                dev = usb.core.find(idVendor=USBID_BROTHER, idProduct=pid, backend=backend)
-                if dev:
-                    found.append({
-                        "product": dev.product or pid.name,
-                        "serial": dev.serial_number or "",
-                        "manufacturer": dev.manufacturer or "",
-                    })
+            for pid, dev in find_brother_devices():
+                found.append({
+                    "product": dev.product or pid.name,
+                    "serial": dev.serial_number or "",
+                    "manufacturer": dev.manufacturer or "",
+                })
         except Exception as e:
             log.warning("USB discovery failed: %s", e)
 
@@ -927,7 +918,6 @@ class PrintPanel(QGroupBox):
         # Re-detect tape for newly selected printer in background
         self._scan_worker = USBScanWorker(serial=serial, detect_tape=True)
         self._scan_worker.tape_detected.connect(self._on_tape_detected)
-        self._scan_worker.printers_found.connect(lambda _: None)
         self._scan_worker.finished.connect(self._scan_worker.deleteLater)
         self._scan_worker.start()
 

@@ -6,6 +6,28 @@ import logging
 log = logging.getLogger(__name__)
 
 
+def _libusb_backend():
+    try:
+        import libusb_package
+        return libusb_package.get_libusb1_backend()
+    except ImportError:
+        return None
+
+
+def find_brother_devices():
+    """Each supported product id, with the first matching USB device if present."""
+    import usb.core
+    from .constants import USBID_BROTHER, SupportedPrinterIDs
+
+    backend = _libusb_backend()
+    found = []
+    for pid in SupportedPrinterIDs:
+        dev = usb.core.find(idVendor=USBID_BROTHER, idProduct=pid, backend=backend)
+        if dev is not None:
+            found.append((pid, dev))
+    return found
+
+
 class Transport(ABC):
     """Abstract byte-level transport to a Brother PT printer."""
 
@@ -29,33 +51,17 @@ class Transport(ABC):
         self.close()
 
 
-# ---------------------------------------------------------------------------
-# USB Transport  (from brother_pt)
-# ---------------------------------------------------------------------------
-
 class USBTransport(Transport):
     def __init__(self, serial: Optional[str] = None):
         self._serial = serial
         self._dev = None
 
     def connect(self) -> None:
-        import usb.core
-        import usb.util
-        from .constants import USBID_BROTHER, SupportedPrinterIDs
-
-        try:
-            import libusb_package
-            backend = libusb_package.get_libusb1_backend()
-        except ImportError:
-            backend = None
-
-        for pid in SupportedPrinterIDs:
-            dev = usb.core.find(idVendor=USBID_BROTHER, idProduct=pid, backend=backend)
-            if dev is not None:
-                if self._serial and dev.serial_number != self._serial:
-                    continue
-                self._dev = dev
-                break
+        for _pid, dev in find_brother_devices():
+            if self._serial and dev.serial_number != self._serial:
+                continue
+            self._dev = dev
+            break
 
         if self._dev is None:
             raise RuntimeError("No supported USB printer found")
@@ -64,7 +70,7 @@ class USBTransport(Transport):
         try:
             if self._dev.is_kernel_driver_active(0):
                 self._dev.detach_kernel_driver(0)
-        except (NotImplementedError, Exception):
+        except Exception:
             pass
         self._dev.set_configuration()
         log.info("USB connected: %s", self._dev.product)

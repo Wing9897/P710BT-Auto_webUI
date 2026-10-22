@@ -112,16 +112,6 @@ export async function openDevice(device) {
   return device;
 }
 
-export async function closeDevice(device) {
-  if (!device) return;
-  try {
-    if (device.__p710) await device.releaseInterface(device.__p710.number);
-  } catch { /* already released */ }
-  try {
-    await device.close();
-  } catch { /* already closed */ }
-}
-
 function statusError(raw) {
   const messages = [];
   const e1 = raw[8];
